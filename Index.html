@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 600px; margin: auto; }
+      #display { border: 1px solid #ccc; padding: 15px; background: #f9f9f9; white-space: pre-wrap; }
+      .admin-panel { margin-top: 20px; padding: 15px; border: 2px dashed #007bff; }
+      textarea { width: 100%; height: 100px; margin-bottom: 10px; }
+      button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; }
+    </style>
+  </head>
+  <body>
+    <h2>Bảng tỉ số trực tuyến</h2>
+    <div id="display">Đang tải...</div>
+    <button onclick="loadData()" style="margin-top:10px; background:#28a745">Làm mới</button>
+
+    <? if (isAdmin) { ?>
+      <div class="admin-panel">
+        <h3>Dành cho người cập nhật</h3>
+        <textarea id="editor" placeholder="Nhập tỉ số... Ví dụ: Việt Nam 2 - 1 Thái Lan"></textarea>
+        <button onclick="update()">Lưu thay đổi</button>
+      </div>
+    <? } ?>
+
+    <script>
+      function loadData() {
+        google.script.run.withSuccessHandler(function(data) {
+          document.getElementById('display').innerText = data;
+        }).getScores();
+      }
+
+      function update() {
+        var val = document.getElementById('editor').value;
+        google.script.run.withSuccessHandler(function(res) {
+          alert(res);
+          loadData();
+        }).saveScores(val);
+      }
+
+      // Tự động load khi mở trang
+      window.onload = loadData;
+    </script>
+  </body>
+</html>
