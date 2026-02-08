@@ -1,45 +1,332 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-    <style>
-      body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 600px; margin: auto; }
-      #display { border: 1px solid #ccc; padding: 15px; background: #f9f9f9; white-space: pre-wrap; }
-      .admin-panel { margin-top: 20px; padding: 15px; border: 2px dashed #007bff; }
-      textarea { width: 100%; height: 100px; margin-bottom: 10px; }
-      button { padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; }
-    </style>
-  </head>
-  <body>
-    <h2>Bảng tỉ số trực tuyến</h2>
-    <div id="display">Đang tải...</div>
-    <button onclick="loadData()" style="margin-top:10px; background:#28a745">Làm mới</button>
+<html lang="vi">
 
-    <? if (isAdmin) { ?>
-      <div class="admin-panel">
-        <h3>Dành cho người cập nhật</h3>
-        <textarea id="editor" placeholder="Nhập tỉ số... Ví dụ: Việt Nam 2 - 1 Thái Lan"></textarea>
-        <button onclick="update()">Lưu thay đổi</button>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Nine Ball Spring Open 2026 - Swiss System Tournament">
+  <title>Nine Ball Spring Open 2026</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <?!= include('styles'); ?>
+</head>
+
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header__icon">🎱</div>
+      <h1 class="header__title">Nine Ball Spring Open 2026</h1>
+      <div class="header__subtitle">
+        <span class="header__badge" id="roundBadge">Vòng 0/0</span>
+        <span class="header__badge header__badge--live" id="statusBadge">Đang tải...</span>
       </div>
-    <? } ?>
+    </header>
 
-    <script>
-      function loadData() {
-        google.script.run.withSuccessHandler(function(data) {
-          document.getElementById('display').innerText = data;
-        }).getScores();
+    <!-- Main Content -->
+    <main>
+      <!-- Leaderboard -->
+      <section class="card" id="leaderboardCard">
+        <div class="card__header">
+          <span class="card__icon">📊</span>
+          <h2 class="card__title">Bảng Xếp Hạng</h2>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Tên</th>
+                <th>Hạng</th>
+                <th>W</th>
+                <th>L</th>
+                <th>+/-</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboardBody">
+              <tr>
+                <td colspan="6" class="empty-state">
+                  <div class="loading">
+                    <div class="spinner"></div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Current Matches -->
+      <section class="card" id="matchesCard">
+        <div class="card__header">
+          <span class="card__icon">🎯</span>
+          <h2 class="card__title">Trận Đấu Hiện Tại</h2>
+        </div>
+
+        <div class="matches-grid" id="currentMatchesGrid">
+          <div class="loading">
+            <div class="spinner"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Match History -->
+      <section class="card" id="historyCard">
+        <div class="card__header">
+          <span class="card__icon">📜</span>
+          <h2 class="card__title">Lịch Sử Trận Đấu</h2>
+        </div>
+
+        <!-- Round Tabs -->
+        <div class="tabs" id="roundTabs"></div>
+
+        <div id="historyContent">
+          <div class="empty-state">
+            <div class="empty-state__icon">📋</div>
+            <p>Chưa có trận đấu nào</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer style="text-align: center; padding: 2rem 0; color: var(--text-muted); font-size: 0.85rem;">
+      <p>Swiss System Tournament • Auto-refresh mỗi 30 giây</p>
+      <? if (isAdmin) { ?>
+      <p style="margin-top: 0.5rem;">
+        <a href="?key=admin123&page=admin" class="btn btn--secondary btn--sm">🔐 Admin Panel</a>
+      </p>
+      <? } ?>
+    </footer>
+  </div>
+
+  <script>
+    // ============ State ============
+    let tournamentConfig = null;
+    let leaderboard = [];
+    let allMatches = [];
+    let currentRound = 0;
+
+    // ============ API Helpers ============
+    function callApi(functionName, ...args) {
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+        [functionName](...args);
+      });
+    }
+
+    // ============ Data Loading ============
+    async function loadAllData() {
+      try {
+        const [config, lb, matches] = await Promise.all([
+          callApi('api_getTournamentConfig'),
+          callApi('api_getLeaderboard'),
+          callApi('api_getAllMatches')
+        ]);
+
+        tournamentConfig = config;
+        leaderboard = lb;
+        allMatches = matches;
+        currentRound = config.currentRound;
+
+        renderAll();
+      } catch (error) {
+        console.error('Error loading data:', error);
+        showError('Không thể tải dữ liệu. Vui lòng thử lại.');
+      }
+    }
+
+    // ============ Render Functions ============
+    function renderAll() {
+      renderStatus();
+      renderLeaderboard();
+      renderCurrentMatches();
+      renderHistory();
+    }
+
+    function renderStatus() {
+      const roundBadge = document.getElementById('roundBadge');
+      const statusBadge = document.getElementById('statusBadge');
+
+      roundBadge.textContent = `Vòng ${tournamentConfig.currentRound}/${tournamentConfig.totalRounds}`;
+
+      const statusMap = {
+        'registration': { text: 'Đăng ký', class: '' },
+        'ongoing': { text: 'Đang diễn ra', class: 'header__badge--live' },
+        'finished': { text: 'Đã kết thúc', class: '' }
+      };
+
+      const status = statusMap[tournamentConfig.status] || statusMap.registration;
+      statusBadge.textContent = status.text;
+      statusBadge.className = 'header__badge ' + status.class;
+    }
+
+    function renderLeaderboard() {
+      const tbody = document.getElementById('leaderboardBody');
+
+      if (leaderboard.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="empty-state">
+              <div class="empty-state__icon">👥</div>
+              <p>Chưa có người chơi</p>
+            </td>
+          </tr>
+        `;
+        return;
       }
 
-      function update() {
-        var val = document.getElementById('editor').value;
-        google.script.run.withSuccessHandler(function(res) {
-          alert(res);
-          loadData();
-        }).saveScores(val);
+      tbody.innerHTML = leaderboard.map((player, index) => {
+        const rankClass = index < 3 ? `rank-${index + 1}` : '';
+        const diffClass = player.rackDiff > 0 ? 'stat-positive' : (player.rackDiff < 0 ? 'stat-negative' : '');
+        const diffSign = player.rackDiff > 0 ? '+' : '';
+
+        return `
+          <tr>
+            <td class="rank-cell ${rankClass}">${player.rank}</td>
+            <td><strong>${escapeHtml(player.name)}</strong></td>
+            <td><span class="player-rank-badge">${escapeHtml(player.playerRank)}</span></td>
+            <td><strong>${player.wins}</strong></td>
+            <td>${player.losses}</td>
+            <td class="${diffClass}">${diffSign}${player.rackDiff}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderCurrentMatches() {
+      const grid = document.getElementById('currentMatchesGrid');
+      const currentMatches = allMatches.filter(m => m.round === currentRound);
+
+      if (currentMatches.length === 0) {
+        grid.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state__icon">🎱</div>
+            <p>${currentRound === 0 ? 'Giải đấu chưa bắt đầu' : 'Không có trận đấu trong vòng này'}</p>
+          </div>
+        `;
+        return;
       }
 
-      // Tự động load khi mở trang
-      window.onload = loadData;
-    </script>
-  </body>
+      grid.innerHTML = currentMatches.map(match => renderMatchCard(match)).join('');
+    }
+
+    function renderMatchCard(match) {
+      const isCompleted = match.status === 'completed';
+      const isBye = match.isBye;
+
+      const cardClass = `match-card ${isCompleted ? 'match-card--completed' : ''} ${isBye ? 'match-card--bye' : ''}`;
+
+      const player1Class = match.winner === match.player1Id ? 'match-player--winner' : '';
+      const player2Class = match.winner === match.player2Id ? 'match-player--winner' : '';
+
+      return `
+        <div class="${cardClass}">
+          <div class="match-player ${player1Class}">
+            <div class="match-player__name">${escapeHtml(match.player1Name)}</div>
+          </div>
+          <div class="match-vs">
+            <span class="match-score ${!isCompleted ? 'match-score--pending' : ''}">${match.score1 ?? '-'}</span>
+            <span>:</span>
+            <span class="match-score ${!isCompleted ? 'match-score--pending' : ''}">${match.score2 ?? '-'}</span>
+          </div>
+          <div class="match-player ${player2Class}">
+            <div class="match-player__name">${escapeHtml(match.player2Name)}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderHistory() {
+      const tabsContainer = document.getElementById('roundTabs');
+      const contentContainer = document.getElementById('historyContent');
+
+      if (currentRound === 0) {
+        tabsContainer.innerHTML = '';
+        contentContainer.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state__icon">📋</div>
+            <p>Chưa có trận đấu nào</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Render tabs
+      let tabsHtml = '';
+      for (let i = 1; i <= currentRound; i++) {
+        const isActive = i === currentRound ? 'tab--active' : '';
+        tabsHtml += `<button class="tab ${isActive}" data-round="${i}">Vòng ${i}</button>`;
+      }
+      tabsContainer.innerHTML = tabsHtml;
+
+      // Add tab click handlers
+      tabsContainer.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          const round = parseInt(tab.dataset.round);
+          showHistoryRound(round);
+
+          // Update active state
+          tabsContainer.querySelectorAll('.tab').forEach(t => t.classList.remove('tab--active'));
+          tab.classList.add('tab--active');
+        });
+      });
+
+      // Show current round history
+      showHistoryRound(currentRound);
+    }
+
+    function showHistoryRound(round) {
+      const contentContainer = document.getElementById('historyContent');
+      const roundMatches = allMatches.filter(m => m.round === round);
+
+      if (roundMatches.length === 0) {
+        contentContainer.innerHTML = `
+          <div class="empty-state">
+            <p>Không có trận đấu trong vòng ${round}</p>
+          </div>
+        `;
+        return;
+      }
+
+      contentContainer.innerHTML = `
+        <div class="matches-grid">
+          ${roundMatches.map(match => renderMatchCard(match)).join('')}
+        </div>
+      `;
+    }
+
+    // ============ Utilities ============
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function showError(message) {
+      // Simple error display
+      alert(message);
+    }
+
+    // ============ Auto Refresh ============
+    function startAutoRefresh() {
+      setInterval(loadAllData, 30000); // 30 seconds
+    }
+
+    // ============ Init ============
+    document.addEventListener('DOMContentLoaded', () => {
+      loadAllData();
+      startAutoRefresh();
+    });
+  </script>
+</body>
+
 </html>

@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Nine Ball Spring Open 2026</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Styles -->
+    <?!= include('styles'); ?>
+</head>
+
+<body>
+    <div class="container">
+        <!-- Admin Warning -->
+        <div class="admin-header">
+            <span class="admin-header__icon">🔐</span>
+            <span class="admin-header__text">Admin Panel - Chỉ dành cho quản lý giải đấu</span>
+        </div>
+
+        <!-- Header -->
+        <header class="header" style="padding: 1rem 0;">
+            <h1 class="header__title" style="font-size: 1.75rem;">🎱 Admin Panel</h1>
+            <div class="header__subtitle">
+                <span class="header__badge" id="roundBadge">Vòng 0/0</span>
+                <span id="statusBadge" class="status-badge status-badge--registration">Đang tải...</span>
+            </div>
+        </header>
+
+        <!-- Alert Container -->
+        <div id="alertContainer"></div>
+
+        <!-- Main Content -->
+        <main>
+            <div class="grid grid--2">
+                <!-- Left Column: Tournament Config & Players -->
+                <div>
+                    <!-- Tournament Config -->
+                    <section class="card">
+                        <div class="card__header">
+                            <span class="card__icon">⚙️</span>
+                            <h2 class="card__title">Cấu Hình Giải Đấu</h2>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Tên giải đấu</label>
+                            <input type="text" class="form-input" id="tournamentName"
+                                placeholder="Nine Ball Spring Open 2026">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Số vòng đấu</label>
+                            <input type="number" class="form-input" id="totalRounds" min="1" max="10" value="5">
+                        </div>
+
+                        <button class="btn btn--primary" onclick="saveConfig()" id="saveConfigBtn">
+                            💾 Lưu cấu hình
+                        </button>
+                    </section>
+
+                    <!-- Player Management -->
+                    <section class="card">
+                        <div class="card__header">
+                            <span class="card__icon">👥</span>
+                            <h2 class="card__title">Quản Lý Người Chơi</h2>
+                            <span style="margin-left: auto; color: var(--text-muted);" id="playerCount">0/32</span>
+                        </div>
+
+                        <!-- Add Player Form -->
+                        <div class="form-row" id="addPlayerForm">
+                            <div class="form-group" style="flex: 2;">
+                                <label class="form-label">Tên người chơi</label>
+                                <input type="text" class="form-input" id="playerName" placeholder="Nguyễn Văn A">
+                            </div>
+                            <div class="form-group" style="flex: 1;">
+                                <label class="form-label">Hạng</label>
+                                <select class="form-select" id="playerRank">
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                    <option value="D">D</option>
+                                    <option value="N/A">N/A</option>
+                                </select>
+                            </div>
+                            <div class="form-group" style="flex: 0;">
+                                <label class="form-label">&nbsp;</label>
+                                <button class="btn btn--success" onclick="addPlayer()">+ Thêm</button>
+                            </div>
+                        </div>
+
+                        <!-- Player List -->
+                        <div id="playerList" style="margin-top: 1rem; max-height: 300px; overflow-y: auto;">
+                            <div class="loading">
+                                <div class="spinner"></div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- Right Column: Match Management -->
+                <div>
+                    <!-- Match Control -->
+                    <section class="card">
+                        <div class="card__header">
+                            <span class="card__icon">🎮</span>
+                            <h2 class="card__title">Điều Khiển Giải Đấu</h2>
+                        </div>
+
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="btn btn--primary" onclick="generatePairings()" id="generateBtn">
+                                🎲 Tạo cặp đấu vòng mới
+                            </button>
+                            <button class="btn btn--secondary" onclick="window.open('?key=admin123', '_blank')">
+                                👁️ Xem trang công khai
+                            </button>
+                        </div>
+
+                        <hr style="border: none; border-top: 1px solid var(--glass-border); margin: 1rem 0;">
+
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn btn--danger btn--sm" onclick="confirmResetTournament()">
+                                🔄 Reset kết quả
+                            </button>
+                            <button class="btn btn--danger btn--sm" onclick="confirmResetAll()">
+                                ⚠️ Xoá tất cả
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- Score Input -->
+                    <section class="card">
+                        <div class="card__header">
+                            <span class="card__icon">📝</span>
+                            <h2 class="card__title">Nhập Tỉ Số</h2>
+                            <span style="margin-left: auto; color: var(--text-muted);" id="matchProgress">0/0</span>
+                        </div>
+
+                        <div id="scoreInputContainer">
+                            <div class="loading">
+                                <div class="spinner"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Quick Leaderboard -->
+                    <section class="card">
+                        <div class="card__header">
+                            <span class="card__icon">📊</span>
+                            <h2 class="card__title">Bảng Xếp Hạng</h2>
+                        </div>
+
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Tên</th>
+                                        <th>W-L</th>
+                                        <th>+/-</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="leaderboardBody">
+                                    <tr>
+                                        <td colspan="4" style="text-align: center;">Đang tải...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // ============ State ============
+        let tournamentConfig = null;
+        let players = [];
+        let allMatches = [];
+
+        // ============ API Helpers ============
+        function callApi(functionName, ...args) {
+            return new Promise((resolve, reject) => {
+                google.script.run
+                    .withSuccessHandler(resolve)
+                    .withFailureHandler(reject)
+                [functionName](...args);
+            });
+        }
+
+        // ============ Alert System ============
+        function showAlert(message, type = 'info') {
+            const container = document.getElementById('alertContainer');
+            const alert = document.createElement('div');
+            alert.className = `alert alert--${type}`;
+            alert.innerHTML = `<span>${message}</span>`;
+            container.appendChild(alert);
+
+            setTimeout(() => alert.remove(), 5000);
+        }
+
+        // ============ Data Loading ============
+        async function loadAllData() {
+            try {
+                const [config, playerList, matches, leaderboard] = await Promise.all([
+                    callApi('api_getTournamentConfig'),
+                    callApi('api_getPlayers'),
+                    callApi('api_getAllMatches'),
+                    callApi('api_getLeaderboard')
+                ]);
+
+                tournamentConfig = config;
+                players = playerList;
+                allMatches = matches;
+
+                renderAll(leaderboard);
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showAlert('Không thể tải dữ liệu: ' + error.message, 'error');
+            }
+        }
+
+        // ============ Render Functions ============
+        function renderAll(leaderboard) {
+            renderStatus();
+            renderConfig();
+            renderPlayers();
+            renderScoreInput();
+            renderLeaderboard(leaderboard);
+            updateButtonStates();
+        }
+
+        function renderStatus() {
+            document.getElementById('roundBadge').textContent =
+                `Vòng ${tournamentConfig.currentRound}/${tournamentConfig.totalRounds}`;
+
+            const statusBadge = document.getElementById('statusBadge');
+            const statusMap = {
+                'registration': { text: '📝 Đăng ký', class: 'status-badge--registration' },
+                'ongoing': { text: '🎱 Đang diễn ra', class: 'status-badge--ongoing' },
+                'finished': { text: '🏆 Đã kết thúc', class: 'status-badge--finished' }
+            };
+            const status = statusMap[tournamentConfig.status];
+            statusBadge.textContent = status.text;
+            statusBadge.className = 'status-badge ' + status.class;
+        }
+
+        function renderConfig() {
+            document.getElementById('tournamentName').value = tournamentConfig.tournamentName;
+            document.getElementById('totalRounds').value = tournamentConfig.totalRounds;
+        }
+
+        function renderPlayers() {
+            const container = document.getElementById('playerList');
+            const countEl = document.getElementById('playerCount');
+
+            countEl.textContent = `${players.length}/32`;
+
+            if (players.length === 0) {
+                container.innerHTML = `
+          <div class="empty-state">
+            <p>Chưa có người chơi. Thêm người chơi để bắt đầu!</p>
+          </div>
+        `;
+                return;
+            }
+
+            const canRemove = tournamentConfig.status === 'registration';
+
+            container.innerHTML = players.map((player, index) => `
+        <div class="player-item">
+          <div class="player-item__info">
+            <span class="player-item__number">${index + 1}</span>
+            <span><strong>${escapeHtml(player.name)}</strong></span>
+            <span class="player-rank-badge">${escapeHtml(player.rank)}</span>
+          </div>
+          ${canRemove ? `
+            <button class="btn btn--danger btn--sm" onclick="removePlayer('${player.id}')">✕</button>
+          ` : ''}
+        </div>
+      `).join('');
+        }
+
+        function renderScoreInput() {
+            const container = document.getElementById('scoreInputContainer');
+            const progressEl = document.getElementById('matchProgress');
+
+            const currentMatches = allMatches.filter(m => m.round === tournamentConfig.currentRound);
+            const pendingMatches = currentMatches.filter(m => m.status === 'pending' && !m.isBye);
+            const completedCount = currentMatches.filter(m => m.status === 'completed').length;
+
+            progressEl.textContent = `${completedCount}/${currentMatches.length}`;
+
+            if (pendingMatches.length === 0) {
+                const message = tournamentConfig.currentRound === 0
+                    ? 'Nhấn "Tạo cặp đấu vòng mới" để bắt đầu'
+                    : 'Tất cả trận đấu đã hoàn thành!';
+                container.innerHTML = `
+          <div class="empty-state">
+            <p>${message}</p>
+          </div>
+        `;
+                return;
+            }
+
+            container.innerHTML = pendingMatches.map(match => `
+        <div class="match-card" data-match-id="${match.id}">
+          <div class="match-player">
+            <div class="match-player__name">${escapeHtml(match.player1Name)}</div>
+          </div>
+          <div class="match-vs">
+            <div class="score-input-group">
+              <input type="number" class="form-input score-input" 
+                     id="score1_${match.id}" min="0" max="99" placeholder="0">
+              <span>:</span>
+              <input type="number" class="form-input score-input" 
+                     id="score2_${match.id}" min="0" max="99" placeholder="0">
+            </div>
+          </div>
+          <div class="match-player">
+            <div class="match-player__name">${escapeHtml(match.player2Name)}</div>
+          </div>
+          <button class="btn btn--success btn--sm" onclick="submitScore('${match.id}')">✓</button>
+        </div>
+      `).join('');
+        }
+
+        function renderLeaderboard(leaderboard) {
+            const tbody = document.getElementById('leaderboardBody');
+
+            if (!leaderboard || leaderboard.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Chưa có dữ liệu</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = leaderboard.slice(0, 10).map(player => {
+                const diffClass = player.rackDiff > 0 ? 'stat-positive' : (player.rackDiff < 0 ? 'stat-negative' : '');
+                const diffSign = player.rackDiff > 0 ? '+' : '';
+                return `
+          <tr>
+            <td>${player.rank}</td>
+            <td>${escapeHtml(player.name)}</td>
+            <td>${player.wins}-${player.losses}</td>
+            <td class="${diffClass}">${diffSign}${player.rackDiff}</td>
+          </tr>
+        `;
+            }).join('');
+        }
+
+        function updateButtonStates() {
+            const addForm = document.getElementById('addPlayerForm');
+            const generateBtn = document.getElementById('generateBtn');
+            const saveConfigBtn = document.getElementById('saveConfigBtn');
+
+            const isRegistration = tournamentConfig.status === 'registration';
+            const isFinished = tournamentConfig.status === 'finished';
+            const currentMatches = allMatches.filter(m => m.round === tournamentConfig.currentRound);
+            const allCompleted = currentMatches.every(m => m.status === 'completed');
+            const canGenerate = (isRegistration && players.length >= 2) ||
+                (!isFinished && allCompleted && tournamentConfig.currentRound < tournamentConfig.totalRounds);
+
+            // Disable add player if tournament started
+            if (!isRegistration) {
+                addForm.style.opacity = '0.5';
+                addForm.querySelectorAll('input, select, button').forEach(el => el.disabled = true);
+            }
+
+            // Generate button text
+            if (tournamentConfig.currentRound === 0) {
+                generateBtn.innerHTML = '🎲 Bắt đầu vòng 1';
+            } else if (tournamentConfig.currentRound >= tournamentConfig.totalRounds) {
+                generateBtn.innerHTML = '🏆 Giải đấu kết thúc';
+                generateBtn.disabled = true;
+            } else {
+                generateBtn.innerHTML = `🎲 Tạo cặp đấu vòng ${tournamentConfig.currentRound + 1}`;
+            }
+
+            generateBtn.disabled = !canGenerate || isFinished;
+            saveConfigBtn.disabled = !isRegistration;
+        }
+
+        // ============ Actions ============
+        async function saveConfig() {
+            const name = document.getElementById('tournamentName').value.trim();
+            const rounds = parseInt(document.getElementById('totalRounds').value);
+
+            if (!name) {
+                showAlert('Vui lòng nhập tên giải đấu', 'error');
+                return;
+            }
+
+            if (rounds < 1 || rounds > 10) {
+                showAlert('Số vòng phải từ 1-10', 'error');
+                return;
+            }
+
+            try {
+                await callApi('api_setTournamentConfig', {
+                    ...tournamentConfig,
+                    tournamentName: name,
+                    totalRounds: rounds
+                });
+                showAlert('Đã lưu cấu hình!', 'success');
+                loadAllData();
+            } catch (error) {
+                showAlert('Lỗi: ' + error.message, 'error');
+            }
+        }
+
+        async function addPlayer() {
+            const name = document.getElementById('playerName').value.trim();
+            const rank = document.getElementById('playerRank').value;
+
+            if (!name) {
+                showAlert('Vui lòng nhập tên người chơi', 'error');
+                return;
+            }
+
+            try {
+                await callApi('api_addPlayer', name, rank);
+                document.getElementById('playerName').value = '';
+                showAlert(`Đã thêm: ${name}`, 'success');
+                loadAllData();
+            } catch (error) {
+                showAlert('Lỗi: ' + error.message, 'error');
+            }
+        }
+
+        async function removePlayer(playerId) {
+            if (!confirm('Xác nhận xoá người chơi này?')) return;
+
+            try {
+                await callApi('api_removePlayer', playerId);
+                showAlert('Đã xoá người chơi', 'success');
+                loadAllData();
+            } catch (error) {
+                showAlert('Lỗi: ' + error.message, 'error');
+            }
+        }
+
+        async function generatePairings() {
+            try {
+                const matches = await callApi('api_generatePairings');
+                showAlert(`Đã tạo ${matches.length} cặp đấu cho vòng mới!`, 'success');
+                loadAllData();
+            } catch (error) {
+                showAlert('Lỗi: ' + error.message, 'error');
+            }
+        }
+
+        async function submitScore(matchId) {
+            const score1 = document.getElementById(`score1_${matchId}`).value;
+            const score2 = document.getElementById(`score2_${matchId}`).value;
+
+            if (score1 === '' || score2 === '') {
+                showAlert('Vui lòng nhập đầy đủ tỉ số', 'error');
+                return;
+            }
+
+            try {
+                await callApi('api_updateMatchScore', matchId, score1, score2);
+                showAlert('Đã cập nhật tỉ số!', 'success');
+                loadAllData();
+            } catch (error) {
+                showAlert('Lỗi: ' + error.message, 'error');
+            }
+        }
+
+        async function confirmResetTournament() {
+            if (!confirm('⚠️ Xác nhận RESET kết quả?\n\nĐiều này sẽ:\n- Xoá tất cả trận đấu\n- Reset điểm số về 0\n- Giữ lại danh sách người chơi')) {
+                return;
+            }
+
+            try {
+                await callApi('api_resetTournament');
+                showAlert('Đã reset giải đấu!', 'success');
+                loadAllData();
+            } catch (error) {
+                showAlert('Lỗi: ' + error.message, 'error');
+            }
+        }
+
+        async function confirmResetAll() {
+            if (!confirm('⚠️ XOÁ TẤT CẢ DỮ LIỆU?\n\nĐiều này sẽ:\n- Xoá tất cả người chơi\n- Xoá tất cả trận đấu\n- Reset toàn bộ hệ thống\n\n⛔ KHÔNG THỂ HOÀN TÁC!')) {
+                return;
+            }
+
+            if (!confirm('Xác nhận lần cuối - XOÁ TẤT CẢ?')) {
+                return;
+            }
+
+            try {
+                await callApi('api_resetAll');
+                showAlert('Đã xoá tất cả dữ liệu!', 'success');
+                loadAllData();
+            } catch (error) {
+                showAlert('Lỗi: ' + error.message, 'error');
+            }
+        }
+
+        // ============ Utilities ============
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        // ============ Init ============
+        document.addEventListener('DOMContentLoaded', loadAllData);
+
+        // Enter key to add player
+        document.getElementById('playerName').addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') addPlayer();
+        });
+    </script>
+</body>
+
+</html>

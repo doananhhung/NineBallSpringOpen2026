@@ -62,10 +62,87 @@ graph TB
 
 ### 3. Backlog / TODO
 
-- [ ] Cải thiện bảo mật (thay mật khẩu hardcode)
-- [ ] Thiết kế UI đẹp hơn cho sự kiện billiard
-- [ ] Thêm tính năng hiển thị lịch sử trận đấu
-- [ ] Responsive design cho mobile
+- [x] ~~Cải thiện bảo mật (thay mật khẩu hardcode)~~ → Giữ nguyên URL param theo yêu cầu
+- [x] ~~Thiết kế UI đẹp hơn cho sự kiện billiard~~ → Hoàn thành với glassmorphism
+- [x] ~~Thêm tính năng hiển thị lịch sử trận đấu~~ → Hoàn thành
+- [x] ~~Responsive design cho mobile~~ → Hoàn thành
+
+---
+
+## [2026-02-09] Task: Swiss Tournament System Implementation
+
+### 1. Architectural Decision (ADR)
+
+- **Context**: Cần xây dựng hệ thống quản lý giải đấu Billiards 9-Ball theo hệ thống Thụy Sĩ (Swiss System) với các tính năng: ghép cặp tự động, cập nhật tỉ số, bảng xếp hạng.
+
+- **Decision**: 
+  - Tách logic Swiss algorithm ra file riêng (`swiss.gs`) để dễ bảo trì
+  - Sử dụng JSON storage trong PropertiesService với 3 keys: TOURNAMENT_CONFIG, PLAYERS_DATA, MATCHES_DATA
+  - Ghép cặp vòng 1: ngẫu nhiên (shuffle), vòng 2+: theo thứ hạng (Wins DESC, RackDiff DESC)
+  - Tie-breaker: Rack Difference (+/-)
+  - BYE rule: Người cuối bảng được nghỉ, +1 Win, +7 Rack
+
+- **Impact**: 
+  - Schema mới: Tournament, Player, Match (xem Implementation Plan)
+  - API: 12+ endpoints mới
+  - UI: 2 pages (public + admin)
+
+### 2. Flow Visualization
+
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant Browser
+    participant code.gs
+    participant swiss.gs
+    participant Props as PropertiesService
+
+    Note over Admin,Props: 1. Đăng ký người chơi
+    Admin->>Browser: Mở admin.html?key=admin123
+    Admin->>Browser: Nhập tên + hạng
+    Browser->>code.gs: api_addPlayer(name, rank)
+    code.gs->>swiss.gs: addPlayer()
+    swiss.gs->>Props: Save PLAYERS_DATA
+
+    Note over Admin,Props: 2. Tạo cặp đấu
+    Admin->>Browser: Click "Tạo cặp đấu"
+    Browser->>code.gs: api_generatePairings()
+    code.gs->>swiss.gs: generatePairings()
+    swiss.gs->>swiss.gs: shuffleArray() / sortByStanding()
+    swiss.gs->>Props: Save MATCHES_DATA
+    swiss.gs-->>Browser: Return matches[]
+
+    Note over Admin,Props: 3. Nhập tỉ số
+    Admin->>Browser: Nhập score1, score2
+    Browser->>code.gs: api_updateMatchScore()
+    code.gs->>swiss.gs: updateMatchScore()
+    swiss.gs->>swiss.gs: updatePlayerStats()
+    swiss.gs->>Props: Update PLAYERS + MATCHES
+```
+
+### 3. Files Changed
+
+| File | Thay đổi | Lines |
+|------|----------|-------|
+| `swiss.gs` | **[NEW]** Swiss algorithm + data helpers | ~330 |
+| `code.gs` | **[MODIFY]** API routing + endpoints | ~150 |
+| `styles.html` | **[NEW]** Premium glassmorphism CSS | ~450 |
+| `Index.html` | **[MODIFY]** Public scoreboard | ~280 |
+| `admin.html` | **[NEW]** Admin panel | ~420 |
+
+### 4. Data Schema
+
+```javascript
+// TOURNAMENT_CONFIG
+{ tournamentName, totalRounds, currentRound, status }
+
+// PLAYERS_DATA[]
+{ id, name, rank, wins, losses, rackWon, rackLost, rackDiff, matchHistory }
+
+// MATCHES_DATA[]
+{ id, round, player1Id, player2Id, player1Name, player2Name, 
+  score1, score2, winner, status, isBye }
+```
 
 ---
 
