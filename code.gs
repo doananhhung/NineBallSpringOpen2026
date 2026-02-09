@@ -110,6 +110,10 @@ function api_updateMatchScore(matchId, score1, score2) {
   return updateMatchScore(matchId, score1, score2);
 }
 
+function api_correctMatchScore(matchId, score1, score2) {
+  return correctMatchScore(matchId, score1, score2);
+}
+
 // Swiss Pairing
 function api_generatePairings() {
   return generatePairings();

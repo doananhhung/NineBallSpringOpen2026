@@ -54,8 +54,21 @@ function getTournamentConfig() {
 
 /**
  * Cập nhật config giải đấu
+ * Cho phép tăng số vòng giữa chừng (nhưng không giảm dưới vòng hiện tại)
  */
 function setTournamentConfig(config) {
+  const currentConfig = getTournamentConfig();
+  
+  // Validation: totalRounds phải >= currentRound
+  if (config.totalRounds < currentConfig.currentRound) {
+    throw new Error('Số vòng không thể nhỏ hơn vòng hiện tại (' + currentConfig.currentRound + ')');
+  }
+  
+  // Nếu giải đã kết thúc nhưng tăng số vòng → mở lại giải đấu
+  if (currentConfig.status === 'finished' && config.totalRounds > currentConfig.totalRounds) {
+    config.status = 'ongoing';
+  }
+  
   saveData(STORAGE_KEYS.TOURNAMENT, config);
   return config;
 }
@@ -208,6 +221,104 @@ function updateMatchScore(matchId, score1, score2) {
   return match;
 }
 
+/**
+ * Sửa tỉ số trận đấu đã hoàn thành (hoàn tác stats cũ, áp dụng stats mới)
+ */
+function correctMatchScore(matchId, newScore1, newScore2) {
+  const matches = getAllMatches();
+  const match = matches.find(m => m.id === matchId);
+  
+  if (!match) {
+    throw new Error('Không tìm thấy trận đấu');
+  }
+  
+  if (match.status !== 'completed') {
+    throw new Error('Chỉ có thể sửa trận đấu đã hoàn thành');
+  }
+  
+  if (match.isBye) {
+    throw new Error('Không thể sửa trận BYE');
+  }
+  
+  newScore1 = parseInt(newScore1);
+  newScore2 = parseInt(newScore2);
+  
+  if (isNaN(newScore1) || isNaN(newScore2) || newScore1 < 0 || newScore2 < 0) {
+    throw new Error('Tỉ số không hợp lệ');
+  }
+  
+  if (newScore1 === newScore2) {
+    throw new Error('Tỉ số không được bằng nhau');
+  }
+  
+  const players = getPlayers();
+  const oldScore1 = match.score1;
+  const oldScore2 = match.score2;
+  const oldWinner = match.winner;
+  const newWinner = newScore1 > newScore2 ? match.player1Id : match.player2Id;
+  
+  // Hoàn tác stats cũ cho player1
+  const player1 = players.find(p => p.id === match.player1Id);
+  if (player1) {
+    if (oldWinner === match.player1Id) {
+      player1.wins--;
+    } else {
+      player1.losses--;
+    }
+    player1.rackWon -= oldScore1;
+    player1.rackLost -= oldScore2;
+    player1.rackDiff = player1.rackWon - player1.rackLost;
+  }
+  
+  // Hoàn tác stats cũ cho player2
+  const player2 = players.find(p => p.id === match.player2Id);
+  if (player2) {
+    if (oldWinner === match.player2Id) {
+      player2.wins--;
+    } else {
+      player2.losses--;
+    }
+    player2.rackWon -= oldScore2;
+    player2.rackLost -= oldScore1;
+    player2.rackDiff = player2.rackWon - player2.rackLost;
+  }
+  
+  // Áp dụng stats mới cho player1
+  if (player1) {
+    if (newWinner === match.player1Id) {
+      player1.wins++;
+    } else {
+      player1.losses++;
+    }
+    player1.rackWon += newScore1;
+    player1.rackLost += newScore2;
+    player1.rackDiff = player1.rackWon - player1.rackLost;
+  }
+  
+  // Áp dụng stats mới cho player2
+  if (player2) {
+    if (newWinner === match.player2Id) {
+      player2.wins++;
+    } else {
+      player2.losses++;
+    }
+    player2.rackWon += newScore2;
+    player2.rackLost += newScore1;
+    player2.rackDiff = player2.rackWon - player2.rackLost;
+  }
+  
+  // Cập nhật match
+  match.score1 = newScore1;
+  match.score2 = newScore2;
+  match.winner = newWinner;
+  
+  // Lưu dữ liệu
+  saveData(STORAGE_KEYS.MATCHES, matches);
+  saveData(STORAGE_KEYS.PLAYERS, players);
+  
+  return match;
+}
+
 // ============ SWISS PAIRING ALGORITHM ============
 
 /**
@@ -294,7 +405,7 @@ function generatePairings() {
   if (sortedPlayers.length % 2 === 1) {
     const byePlayer = sortedPlayers[sortedPlayers.length - 1];
     
-    // Tạo trận BYE (auto-win)
+    // Tạo trận BYE (auto-win, không cộng rack để công bằng)
     const byeMatch = {
       id: generateId(),
       round: nextRound,
@@ -302,7 +413,7 @@ function generatePairings() {
       player2Id: null,
       player1Name: byePlayer.name,
       player2Name: 'BYE',
-      score1: DEFAULT_BYE_RACKS,
+      score1: 0,  // Không cộng rack
       score2: 0,
       winner: byePlayer.id,
       status: 'completed',
@@ -311,8 +422,8 @@ function generatePairings() {
     
     newMatches.push(byeMatch);
     
-    // Cập nhật stats cho người được BYE
-    updatePlayerStats(byePlayer.id, DEFAULT_BYE_RACKS, 0, null, true);
+    // Cập nhật stats cho người được BYE: chỉ +1 Win, không cộng Rack
+    updatePlayerStats(byePlayer.id, 0, 0, null, true);
   }
   
   // Lưu matches và cập nhật config

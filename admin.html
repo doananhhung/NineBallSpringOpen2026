@@ -80,11 +80,9 @@
                             <div class="form-group" style="flex: 1;">
                                 <label class="form-label">Hạng</label>
                                 <select class="form-select" id="playerRank">
-                                    <option value="A">A</option>
-                                    <option value="B">B</option>
-                                    <option value="C">C</option>
-                                    <option value="D">D</option>
-                                    <option value="N/A">N/A</option>
+                                    <option value="G">G</option>
+                                    <option value="H">H</option>
+                                    <option value="I">I</option>
                                 </select>
                             </div>
                             <div class="form-group" style="flex: 0;">
@@ -141,6 +139,21 @@
                         </div>
 
                         <div id="scoreInputContainer">
+                            <div class="loading">
+                                <div class="spinner"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Completed Matches (Editable) -->
+                    <section class="card">
+                        <div class="card__header">
+                            <span class="card__icon">✅</span>
+                            <h2 class="card__title">Trận Đã Hoàn Thành</h2>
+                            <span style="margin-left: auto; color: var(--text-muted);">Nhấn ✏️ để sửa</span>
+                        </div>
+
+                        <div id="completedMatchesContainer" style="max-height: 300px; overflow-y: auto;">
                             <div class="loading">
                                 <div class="spinner"></div>
                             </div>
@@ -231,6 +244,7 @@
             renderConfig();
             renderPlayers();
             renderScoreInput();
+            renderCompletedMatches();
             renderLeaderboard(leaderboard);
             updateButtonStates();
         }
@@ -330,6 +344,73 @@
       `).join('');
         }
 
+        function renderCompletedMatches() {
+            const container = document.getElementById('completedMatchesContainer');
+
+            const currentMatches = allMatches.filter(m => m.round === tournamentConfig.currentRound);
+            const completedMatches = currentMatches.filter(m => m.status === 'completed');
+
+            if (completedMatches.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <p>Chưa có trận đấu nào hoàn thành</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = completedMatches.map(match => {
+                const isEditing = match.isEditing;
+                const isBye = match.isBye;
+                const winnerClass1 = match.winner === match.player1Id ? 'stat-positive' : '';
+                const winnerClass2 = match.winner === match.player2Id ? 'stat-positive' : '';
+
+                if (isBye) {
+                    return `
+                        <div class="match-card match-card--completed" style="opacity: 0.7;">
+                            <div class="match-player">
+                                <div class="match-player__name">${escapeHtml(match.player1Name)}</div>
+                            </div>
+                            <div class="match-vs">
+                                <span class="stat-positive" style="font-weight: bold;">BYE</span>
+                            </div>
+                            <div class="match-player">
+                                <div class="match-player__name" style="color: var(--text-muted);">—</div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="match-card match-card--completed" data-match-id="${match.id}">
+                        <div class="match-player">
+                            <div class="match-player__name ${winnerClass1}">${escapeHtml(match.player1Name)}</div>
+                        </div>
+                        <div class="match-vs">
+                            <div class="score-display" id="display_${match.id}">
+                                <span class="${winnerClass1}" style="font-weight: bold; font-size: 1.2rem;">${match.score1}</span>
+                                <span style="margin: 0 0.3rem;">:</span>
+                                <span class="${winnerClass2}" style="font-weight: bold; font-size: 1.2rem;">${match.score2}</span>
+                            </div>
+                            <div class="score-edit-group" id="edit_${match.id}" style="display: none;">
+                                <input type="number" class="form-input score-input" 
+                                       id="edit_score1_${match.id}" min="0" max="99" value="${match.score1}">
+                                <span>:</span>
+                                <input type="number" class="form-input score-input" 
+                                       id="edit_score2_${match.id}" min="0" max="99" value="${match.score2}">
+                            </div>
+                        </div>
+                        <div class="match-player">
+                            <div class="match-player__name ${winnerClass2}">${escapeHtml(match.player2Name)}</div>
+                        </div>
+                        <button class="btn btn--secondary btn--sm" id="editBtn_${match.id}" onclick="toggleEditMatch('${match.id}')">✏️</button>
+                        <button class="btn btn--success btn--sm" id="saveBtn_${match.id}" style="display: none;" onclick="saveEditMatch('${match.id}')">✓</button>
+                        <button class="btn btn--danger btn--sm" id="cancelBtn_${match.id}" style="display: none;" onclick="cancelEditMatch('${match.id}')">✕</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
         function renderLeaderboard(leaderboard) {
             const tbody = document.getElementById('leaderboardBody');
 
@@ -381,7 +462,16 @@
             }
 
             generateBtn.disabled = !canGenerate || isFinished;
-            saveConfigBtn.disabled = !isRegistration;
+
+            // Cho phép chỉnh sửa số vòng khi đang diễn ra (để tăng số vòng)
+            // Chỉ disable khi giải đã kết thúc hoàn toàn
+            saveConfigBtn.disabled = false;
+
+            // Set min của input số vòng = vòng hiện tại (không cho giảm)
+            document.getElementById('totalRounds').min = Math.max(1, tournamentConfig.currentRound);
+
+            // Disable tên giải đấu khi đã bắt đầu
+            document.getElementById('tournamentName').disabled = !isRegistration;
         }
 
         // ============ Actions ============
@@ -465,6 +555,37 @@
             try {
                 await callApi('api_updateMatchScore', matchId, score1, score2);
                 showAlert('Đã cập nhật tỉ số!', 'success');
+                loadAllData();
+            } catch (error) {
+                showAlert('Lỗi: ' + error.message, 'error');
+            }
+        }
+
+        // ============ Edit Match Score Functions ============
+        function toggleEditMatch(matchId) {
+            document.getElementById(`display_${matchId}`).style.display = 'none';
+            document.getElementById(`edit_${matchId}`).style.display = 'flex';
+            document.getElementById(`editBtn_${matchId}`).style.display = 'none';
+            document.getElementById(`saveBtn_${matchId}`).style.display = 'inline-flex';
+            document.getElementById(`cancelBtn_${matchId}`).style.display = 'inline-flex';
+        }
+
+        function cancelEditMatch(matchId) {
+            loadAllData(); // Reload to reset the form
+        }
+
+        async function saveEditMatch(matchId) {
+            const score1 = document.getElementById(`edit_score1_${matchId}`).value;
+            const score2 = document.getElementById(`edit_score2_${matchId}`).value;
+
+            if (score1 === '' || score2 === '') {
+                showAlert('Vui lòng nhập đầy đủ tỉ số', 'error');
+                return;
+            }
+
+            try {
+                await callApi('api_correctMatchScore', matchId, score1, score2);
+                showAlert('Đã sửa tỉ số thành công!', 'success');
                 loadAllData();
             } catch (error) {
                 showAlert('Lỗi: ' + error.message, 'error');
