@@ -270,6 +270,86 @@ sequenceDiagram
 
 ---
 
+## [2026-02-10] Task: Add Test Suite (69 Test Cases)
+
+### 1. Architectural Decision (ADR)
+
+- **Context**: Dự án không có bất kỳ test nào. Cần tạo test suite để đảm bảo tính đúng đắn của business logic trước khi phát triển thêm tính năng.
+
+- **Decision**: 
+  - Tạo file `tests.gs` chứa 69 test cases chia thành 7 nhóm
+  - Sử dụng pattern test runner đơn giản (assert + try/catch) do GAS không hỗ trợ framework test
+  - Mỗi test function có prefix `test_`, mỗi nhóm có `runTests_GroupName()`
+  - Function `runAllTests()` làm entry point, tự cleanup bằng `resetAll()`
+  - Test categories: Data Helpers (7), Tournament Config (7), Player Management (17), Match Management (17), Swiss Pairing (17), Leaderboard (3), Tournament Control (4)
+
+- **Impact**: 
+  - Không thay đổi Schema/API
+  - File mới: `tests.gs` (~700 lines)
+  - ⚠️ Tests gọi `resetAll()` → XOÁ toàn bộ dữ liệu, chỉ chạy trên môi trường test
+
+### 2. Flow Visualization (Mermaid)
+
+```mermaid
+flowchart TD
+    A[runAllTests] --> B[resetAll - Cleanup]
+    B --> C[runTests_DataHelpers]
+    C --> D[runTests_TournamentConfig]
+    D --> E[runTests_PlayerManagement]
+    E --> F[runTests_MatchManagement]
+    F --> G[runTests_SwissPairing]
+    G --> H[runTests_Leaderboard]
+    H --> I[runTests_TournamentControl]
+    I --> J[resetAll - Final Cleanup]
+    J --> K[Log Results: ✅/❌]
+```
+
+### 3. Files Changed
+
+| File | Thay đổi | Lines |
+|------|----------|-------|
+| `tests.gs` | **[NEW]** 69 test cases + test runner + helpers | ~700 |
+
+---
+
+## [2026-02-10] Task: Add Integration Tests for Data Consistency Bug
+
+### 1. Architectural Decision (ADR)
+
+- **Context**: Bug report — sau 3 vòng, 1 người thua 3 trận nhưng leaderboard chỉ ghi thua 2. Unit tests hiện tại chỉ kiểm tra từng function riêng lẻ, không cross-verify giữa `MATCHES_DATA` và `PLAYERS_DATA`.
+
+- **Decision**: 
+  - Thêm 8 integration tests (category 8) và helper `_verifyStatsConsistency()`
+  - Helper tính lại stats từ `MATCHES_DATA` rồi so sánh với `PLAYERS_DATA` cho từng player
+  - Kịch bản: 4/5/6/7 người, 3 vòng, có/không BYE, có/không sửa tỉ số
+  - Test 8.4 verify sau **mỗi trận** (không chỉ cuối vòng) để xác định chính xác lúc nào data lệch
+  - Thêm `runIntegrationTestsOnly()` để chẩn đoán nhanh
+
+- **Impact**: 
+  - Không thay đổi Schema/API
+  - File: `tests.gs` thêm ~400 lines (tổng ~1500 lines, 77 tests)
+
+### 2. Flow Visualization (Mermaid)
+
+```mermaid
+flowchart LR
+    A[Chạy N vòng] --> B[Đọc MATCHES_DATA]
+    B --> C[Tính lại wins/losses/rack từ matches]
+    A --> D[Đọc PLAYERS_DATA]
+    C --> E{So sánh từng player}
+    D --> E
+    E -->|Khớp| F[✅ PASS]
+    E -->|Lệch| G[❌ FAIL + chi tiết player nào sai]
+```
+
+### 3. Files Changed
+
+| File | Thay đổi | Lines |
+|------|----------|-------|
+| `tests.gs` | **[MODIFY]** Thêm 8 integration tests + helpers | +400 lines |
+
+---
+
 <!-- Template cho entry mới:
 
 ## [YYYY-MM-DD] Task: [Tên Task]
